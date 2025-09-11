@@ -57,41 +57,57 @@ public class SimpleAssembler {
         return locationOctal + " " + instructionOctal + " " + instructionLine;
     }
 
+    //We can use this to separate codes by their different formats. (i.e., not all codes use indirect)
+    enum InstructionFormat {
+        MISC,
+        STANDARD
+    }
+
+    private static Map<String, InstructionFormat> instructionFormats = new HashMap<>();
+
+    static {
+        // Miscellaneous
+        instructionFormats.put("HLT", InstructionFormat.MISC);
+
+        // Standard format
+        instructionFormats.put("LDR", InstructionFormat.STANDARD);
+        instructionFormats.put("STR", InstructionFormat.STANDARD);
+    }
+
     public static Instruction parseInstruction(String line) {
-        // Remove comments (anything after semicolon)
-        if (line.contains(";")) {
-            line = line.substring(0, line.indexOf(";"));
-        }
-
-        // Split by spaces and commas
+        //remove comments and split
+        if (line.contains(";")) {line = line.substring(0, line.indexOf(";"));}
         String[] parts = line.trim().split("[ ,]+");
-
         String opcode = parts[0];
 
-        // Different parsing based on instruction type
-        if (opcode.equals("HLT")) {
-            return new Instruction(opcode, 0, 0, 0, 0);
-        } else if (opcode.equals("AIR") || opcode.equals("SIR")) {
-            // Immediate instructions: AIR r,immed
-            int register = Integer.parseInt(parts[1]);
-            int immediate = Integer.parseInt(parts[2]);
-            return new Instruction(opcode, register, 0, 0, immediate);
-        } else {
-            // Standard format: LDR r,x,address[,I]
-            int register = Integer.parseInt(parts[1]);
-            int index = Integer.parseInt(parts[2]);
-            int address = Integer.parseInt(parts[3]);
-            int indirect = 0;
+        //look up the format and parse
+        InstructionFormat format = instructionFormats.get(opcode);
+        if (format == null) {
+            throw new RuntimeException("Unknown instruction: " + opcode);
+        }
 
-            // Check for indirect addressing (5th parameter)
-            if (parts.length > 4) {
-                indirect = Integer.parseInt(parts[4]);
-            }
+        switch (format) {
+            case MISC:
+                return new Instruction(opcode, 0, 0, 0, 0);
 
-            return new Instruction(opcode, register, index, indirect, address);
+            case STANDARD:
+                int indirect = (parts.length > 4) ? Integer.parseInt(parts[4]) : 0;
+                return new Instruction(opcode,
+                        Integer.parseInt(parts[1]),  //register
+                        Integer.parseInt(parts[2]),  //index
+                        indirect,                    //indirect
+                        Integer.parseInt(parts[3])); //address
+
+            default:
+                throw new RuntimeException("Unhandled instruction format: " + format);
         }
     }
 
+    /**
+     * Pack into 16-bit instruction format:
+     * |Opcode(6)|R(2)|IX(2)|I(1)|Address(5)|
+     * @inst The instruction to pack
+     */
     public static String generateInstruction(Instruction inst) {
         // Get opcode from map
         Integer opcodeValue = opcodes.get(inst.opcode);
@@ -99,15 +115,23 @@ public class SimpleAssembler {
             throw new RuntimeException("Unknown opcode: " + inst.opcode);
         }
 
-        // Pack into 16-bit instruction format:
-        // |Opcode(6)|R(2)|IX(2)|I(1)|Address(5)|
+        //start at 0000000000000000 (all bits zero)
         int instruction = 0;
 
-        instruction |= (opcodeValue & 0x3F) << 10;  // Opcode: bits 15-10
-        instruction |= (inst.register & 0x3) << 8;  // Register: bits 9-8
-        instruction |= (inst.index & 0x3) << 6;     // Index: bits 7-6
-        instruction |= (inst.indirect & 0x1) << 5;  // Indirect: bit 5
-        instruction |= (inst.address & 0x1F);       // Address: bits 4-0
+        // opcode occupies bits 15-10 (the & 0x3 means drop everything but bottom 6 bits, then shift by 10)
+        instruction |= (opcodeValue & 0x3F) << 10;
+
+        // register occupies bits 9-8 (0x3 means drop everything but bottom 2 bits, then shift by 8)
+        instruction |= (inst.register & 0x3) << 8;
+
+        // index occupies bits 7-8 (0x3 means drop everything but bottom 2 bits, then shift by 8)
+        instruction |= (inst.index & 0x3) << 6;
+
+        // indirect occupies bit 5 (0x1 means drop everything but bottom 1 bit, then shift by 5)
+        instruction |= (inst.indirect & 0x1) << 5;
+
+        // address occupies bits 4-0 (0x1F means drop everything but bottom 5 bits, no shift)
+        instruction |= (inst.address & 0x1F);
 
         // Convert to 6-digit octal
         return convertToOctal(instruction, 6);
@@ -116,10 +140,8 @@ public class SimpleAssembler {
     public static String convertToOctal(int value, int digits) {
         String octal = Integer.toOctalString(value);
 
-        // Pad with leading zeros
-        while (octal.length() < digits) {
-            octal = "0" + octal;
-        }
+        //pad with leading zeros so it's like 000020 when integer is 16 (so it's not just 20)
+        while (octal.length() < digits) {octal = "0" + octal}
 
         return octal;
     }
