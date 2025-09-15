@@ -2,17 +2,26 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SimpleAssembler {
+    // Static fields
     private static Map<String, Integer> opcodes = new HashMap<>();
+    private static Map<String, InstructionFormat> instructionFormats = new HashMap<>();
 
+    // Static initializers
     static {
         opcodes.put("HLT", 0);
         opcodes.put("LDR", 1);
     }
 
-    /*
-    Holds instruction data for all opcodes (whether needed or not). For example not all opcodes use
-    an indirect (like AIR). But it's available if needed. IDK how yet to implement nullable.
-    */
+    static {
+        // Miscellaneous
+        instructionFormats.put("HLT", InstructionFormat.MISC);
+
+        // Standard format
+        instructionFormats.put("LDR", InstructionFormat.STANDARD);
+        instructionFormats.put("STR", InstructionFormat.STANDARD);
+    }
+
+    // Inner classes and enums
     static class Instruction {
         String opcode;
         int register;
@@ -29,6 +38,13 @@ public class SimpleAssembler {
         }
     }
 
+    //We can use this to separate codes by their different formats. (i.e., not all codes use indirect)
+    enum InstructionFormat {
+        MISC,
+        STANDARD
+    }
+
+    // Main method - entry point
     public static void main(String[] args) {
         /*
         Right now this just assembles using predefined address location. The file goes like:
@@ -46,32 +62,16 @@ public class SimpleAssembler {
          So the LDX doesn't happen until line 10. We need a way to break those out.
          */
         String result = assemble(20, "LDR 2,1,8");
-        System.out.println(result2);
+        System.out.println(result);
     }
 
+    // Public methods - in order of call hierarchy
     public static String assemble(int location, String instructionLine) {
         Instruction inst = parseInstruction(instructionLine);
         String locationOctal = convertToOctal(location, 6);
         String instructionOctal = generateInstruction(inst);
 
         return locationOctal + " " + instructionOctal + " " + instructionLine;
-    }
-
-    //We can use this to separate codes by their different formats. (i.e., not all codes use indirect)
-    enum InstructionFormat {
-        MISC,
-        STANDARD
-    }
-
-    private static Map<String, InstructionFormat> instructionFormats = new HashMap<>();
-
-    static {
-        // Miscellaneous
-        instructionFormats.put("HLT", InstructionFormat.MISC);
-
-        // Standard format
-        instructionFormats.put("LDR", InstructionFormat.STANDARD);
-        instructionFormats.put("STR", InstructionFormat.STANDARD);
     }
 
     public static Instruction parseInstruction(String line) {
@@ -137,11 +137,12 @@ public class SimpleAssembler {
         return convertToOctal(instruction, 6);
     }
 
+    // Utility methods
     public static String convertToOctal(int value, int digits) {
         String octal = Integer.toOctalString(value);
 
         //pad with leading zeros so it's like 000020 when integer is 16 (so it's not just 20)
-        while (octal.length() < digits) {octal = "0" + octal}
+        while (octal.length() < digits) {octal = "0" + octal;}
 
         return octal;
     }
