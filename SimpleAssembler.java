@@ -5,11 +5,13 @@ public class SimpleAssembler {
     // Static fields
     private static Map<String, Integer> opcodes = new HashMap<>();
     private static Map<String, InstructionFormat> instructionFormats = new HashMap<>();
+    private static Map<String, Integer> symbolTable = new HashMap<>();
 
     // Static initializers
     static {
         opcodes.put("HLT", 0);
         opcodes.put("LDR", 1);
+        opcodes.put("JZ", 8);
     }
 
     static {
@@ -19,6 +21,7 @@ public class SimpleAssembler {
         // Standard format
         instructionFormats.put("LDR", InstructionFormat.STANDARD);
         instructionFormats.put("STR", InstructionFormat.STANDARD);
+        instructionFormats.put("JZ", InstructionFormat.STANDARD);
     }
 
     // Inner classes and enums
@@ -27,9 +30,9 @@ public class SimpleAssembler {
         int register;
         int index;
         int indirect;
-        int address;
+        String address;
 
-        public Instruction(String opcode, int register, int index, int indirect, int address) {
+        public Instruction(String opcode, int register, int index, int indirect, String address) {
             this.opcode = opcode;
             this.register = register;
             this.index = index;
@@ -61,8 +64,15 @@ public class SimpleAssembler {
 
          So the LDX doesn't happen until line 10. We need a way to break those out.
          */
-        String result = assemble(20, "LDR 2,1,8");
-        System.out.println(result);
+        findLabel("End: HLT", 15);
+        int address = lookupLabel("End");
+        System.out.println("End is at address: " + address);
+
+        String result1 = assemble(20, "LDR 2,1,8");
+        System.out.println(result1);
+
+        String result2 = assemble(10, "JZ 0,1,End");
+        System.out.println(result2);
     }
 
     // Public methods - in order of call hierarchy
@@ -88,7 +98,7 @@ public class SimpleAssembler {
 
         switch (format) {
             case MISC:
-                return new Instruction(opcode, 0, 0, 0, 0);
+                return new Instruction(opcode, 0, 0, 0, "0");
 
             case STANDARD:
                 int indirect = (parts.length > 4) ? Integer.parseInt(parts[4]) : 0;
@@ -96,7 +106,7 @@ public class SimpleAssembler {
                         Integer.parseInt(parts[1]),  //register
                         Integer.parseInt(parts[2]),  //index
                         indirect,                    //indirect
-                        Integer.parseInt(parts[3])); //address
+                        parts[3]); //address
 
             default:
                 throw new RuntimeException("Unhandled instruction format: " + format);
@@ -131,7 +141,13 @@ public class SimpleAssembler {
         instruction |= (inst.indirect & 0x1) << 5;
 
         // address occupies bits 4-0 (0x1F means drop everything but bottom 5 bits, no shift)
-        instruction |= (inst.address & 0x1F);
+        int addressValue;
+        if (inst.address.matches("\\d+")) {
+            addressValue = Integer.parseInt(inst.address);
+        } else {
+            addressValue = lookupLabel(inst.address);
+        }
+        instruction |= (addressValue & 0x1F);
 
         // Convert to 6-digit octal
         return convertToOctal(instruction, 6);
@@ -145,5 +161,22 @@ public class SimpleAssembler {
         while (octal.length() < digits) {octal = "0" + octal;}
 
         return octal;
+    }
+
+    public static void findLabel(String line, int address) {
+        if (line.contains(":")) {
+            String labelName = line.substring(0, line.indexOf(":")).trim();
+            symbolTable.put(labelName, address);
+            System.out.println("Found label: " + labelName + " at address " + address);
+        }else {
+            System.out.println("Line: " + line + " has no label");
+        }
+    }
+
+    public static int lookupLabel(String name) {
+        if (symbolTable.containsKey(name)) {
+            return symbolTable.get(name);
+        }
+        throw new RuntimeException("Label not found: " + name);
     }
 }
