@@ -141,7 +141,7 @@ public class SimpleAssembler {
     public static String convertToOctal(int value, int digits) {
         String octal = Integer.toOctalString(value);
 
-        //pad with leading zeros so it's like 000020 when integer is 16 (so it's not just 20)
+        //pad with leading zeros so it's like 000020 when integer is 16 (so it is not just 20)
         while (octal.length() < digits) {octal = "0" + octal;}
 
         return octal;
